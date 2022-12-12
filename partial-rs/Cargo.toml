@@ -1,0 +1,8 @@
+[package]
+name = "partial-rs"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.61"
+
+[dependencies]
+partial-rs-derive = { path = "../partial-rs-derive" }
