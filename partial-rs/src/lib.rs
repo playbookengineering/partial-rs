@@ -143,6 +143,8 @@ impl<K: Ord, T: IntoPartial> IntoPartial for BTreeMap<K, T> {
 
 #[cfg(test)]
 mod test {
+    use crate::IntoPartial;
+
     use super::{Diff, Partial, ToPartial};
     use std::collections::{BTreeMap, HashMap};
 
@@ -639,5 +641,63 @@ mod test {
         let variant_diff = VariantPartial::diff(&variant_c_old, &variant_c_new);
 
         assert!(variant_diff.is_none());
+    }
+
+    #[test]
+    fn symbols_with_generics() {
+        trait Foo: PartialEq + Clone {}
+
+        #[derive(Partial)]
+        #[derive(Default, Debug, Clone, PartialEq, Eq)]
+        struct Data1<F: Foo> {
+            id: usize,
+            data: F,
+        }
+
+        #[derive(Partial)]
+        #[derive(Default, Debug, Clone, PartialEq, Eq)]
+        struct Data2<F>
+        where
+            F: Foo,
+        {
+            id: usize,
+            data: F,
+        }
+
+        #[derive(Partial)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        enum Data3<F: Foo> {
+            Var1(F),
+        }
+
+        #[derive(Debug, Clone, PartialEq)]
+        struct FooImpl;
+
+        impl Foo for FooImpl {}
+
+        let x = Data1 {
+            id: 42,
+            data: FooImpl,
+        };
+
+        let partial = x.into_partial();
+
+        assert_eq!(partial.id, Some(42));
+        assert_eq!(partial.data, Some(FooImpl));
+
+        let x = Data2 {
+            id: 42,
+            data: FooImpl,
+        };
+
+        let partial = x.into_partial();
+
+        assert_eq!(partial.id, Some(42));
+        assert_eq!(partial.data, Some(FooImpl));
+
+        let x = Data3::Var1(FooImpl);
+        let partial = x.into_partial();
+
+        assert!(matches!(partial, Data3Partial::Var1(FooImpl)));
     }
 }
