@@ -95,15 +95,17 @@ pub fn partial(tokens_input: proc_macro::TokenStream) -> proc_macro::TokenStream
         vis,
         ident,
         data,
-        ..
+        generics,
     } = syn::parse(tokens_input).expect("No DeriveInput");
 
     let orig_ident = ident.clone();
     let ident = format_ident!("{ident}Partial");
 
     match data {
-        Data::Struct(data) => partial::to_struct(krate, vis, attrs, orig_ident, ident, data),
-        Data::Enum(data) => partial::to_enum(krate, vis, attrs, orig_ident, ident, data),
+        Data::Struct(data) => {
+            partial::to_struct(krate, vis, attrs, orig_ident, ident, data, generics)
+        }
+        Data::Enum(data) => partial::to_enum(krate, vis, attrs, orig_ident, ident, data, generics),
         _ => panic!("expected a named struct or unnamed enum"),
     }
 }

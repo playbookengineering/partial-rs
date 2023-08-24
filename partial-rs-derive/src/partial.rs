@@ -23,6 +23,7 @@ pub(crate) fn to_struct(
     orig_ident: Ident,
     ident: Ident,
     struct_data: DataStruct,
+    generics: Generics,
 ) -> proc_macro::TokenStream {
     let fields = match struct_data.fields {
         Fields::Named(f) => f.named,
@@ -57,16 +58,18 @@ pub(crate) fn to_struct(
         }
     });
 
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
     let generated = quote! {
         #derive
-        #vis struct #ident {#(
+        #vis struct #ident #generics {#(
             #fields_decl,
         )*}
 
-        impl #krate::Diff for #ident {
-            type Orig = #orig_ident;
+        impl #impl_generics #krate::Diff for #ident #ty_generics #where_clause {
+            type Orig = #orig_ident #ty_generics;
 
-            fn diff(old: &Self::Orig, new: &Self::Orig) -> Option<#ident> {
+            fn diff(old: &Self::Orig, new: &Self::Orig) -> Option<Self> {
                 use #krate::ToPartial as _;
 
                 if old == new {
@@ -81,8 +84,8 @@ pub(crate) fn to_struct(
             }
         }
 
-        impl #krate::IntoPartial for #orig_ident {
-            type Partial = #ident;
+        impl #impl_generics #krate::IntoPartial for #orig_ident #ty_generics #where_clause {
+            type Partial = #ident #ty_generics;
 
             fn into_partial(self) -> Self::Partial {
                 use #krate::IntoPartial as _;
@@ -104,6 +107,7 @@ pub fn to_enum(
     orig_ident: Ident,
     ident: Ident,
     data: DataEnum,
+    generics: Generics,
 ) -> proc_macro::TokenStream {
     let parsed_variants = parse_variants(data.variants);
 
@@ -169,16 +173,18 @@ pub fn to_enum(
 
     let derive = TokenStream::from_iter(attrs.into_iter().map(|a| a.into_token_stream()));
 
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
     let generated = quote! {
         #derive
-        #vis enum #ident {#(
+        #vis enum #ident #generics {#(
             #variants,
         )*}
 
-        impl #krate::Diff for #ident {
-            type Orig = #orig_ident;
+        impl #impl_generics #krate::Diff for #ident #ty_generics #where_clause {
+            type Orig = #orig_ident #ty_generics;
 
-            fn diff(old: &Self::Orig, new: &Self::Orig) -> Option<#ident> {
+            fn diff(old: &Self::Orig, new: &Self::Orig) -> Option<Self> {
                 use #krate::ToPartial as _;
 
                 if old == new {
@@ -193,8 +199,8 @@ pub fn to_enum(
             }
         }
 
-        impl #krate::IntoPartial for #orig_ident {
-            type Partial = #ident;
+        impl #impl_generics #krate::IntoPartial for #orig_ident #ty_generics #where_clause {
+            type Partial = #ident #ty_generics;
 
             fn into_partial(self) -> Self::Partial {
                 match self {#(
