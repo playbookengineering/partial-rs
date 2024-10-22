@@ -27,6 +27,21 @@ where
     }
 }
 
+impl<T> Diff for Option<T>
+where
+    <T as Diff>::Orig: Clone,
+    T: Diff + ToOwned + Clone,
+{
+    type Orig = Option<T::Orig>;
+
+    fn diff(old: &Self::Orig, new: &Self::Orig) -> Option<Self> {
+        Some(match (old, new) {
+            (Some(old), Some(new)) => T::diff(old, new),
+            (_, new) => new.clone().map(|d| d.to_partial()),
+        })
+    }
+}
+
 impl<K, V, S> Diff for HashMap<K, V, S>
 where
     <V as Diff>::Orig: Clone,
@@ -113,6 +128,14 @@ impl<T: IntoPartial> IntoPartial for Recursive<T> {
     }
 }
 
+impl<T: IntoPartial> IntoPartial for Option<T> {
+    type Partial = Option<T::Partial>;
+
+    fn into_partial(self) -> Self::Partial {
+        self.map(|t| t.into_partial())
+    }
+}
+
 impl<T: IntoPartial> IntoPartial for Vec<T> {
     type Partial = Vec<T::Partial>;
 
@@ -179,6 +202,9 @@ mod test {
 
             #[partial(skip, recursive)]
             field4: TestField4, // ->  TestField4Partial
+
+            #[partial(skip, recursive)]
+            field5: Option<TestField4>, // ->  Option<TestField4Partial>
         }
 
         let instance = Test {
@@ -199,12 +225,28 @@ mod test {
                 field1: "f4f1".to_string(),
                 field2: "f4f2".to_string(),
             },
+            field5: Some(TestField4 {
+                field1: "f5f1".to_string(),
+                field2: "f5f2".to_string(),
+            }),
         };
 
         let partial = instance.to_partial();
+        let mut modified = instance.clone();
+
+        modified.field5 = Some(TestField4 {
+            field1: "f5f1".to_string(),
+            field2: "fpf2-modified".to_string(),
+        });
+        let diff = TestPartial::diff(&instance, &modified).unwrap();
+        assert_eq!(diff.field5.unwrap().field2.unwrap(), "fpf2-modified");
 
         assert_eq!(partial.field1, Some(instance.field1));
         assert_eq!(partial.field2, instance.field2);
+        assert_eq!(
+            partial.field5.map(|f| f.field2),
+            instance.field5.map(|f| Some(f.field2))
+        );
 
         let f3 = partial.field3.clone().unwrap();
         let mut iter = f3.into_iter().zip(instance.field3.clone());
@@ -699,5 +741,72 @@ mod test {
         let partial = x.into_partial();
 
         assert!(matches!(partial, Data3Partial::Var1(FooImpl)));
+    }
+
+    #[test]
+    fn optional_skip_recursive() {
+        #[derive(Partial)]
+        #[derive(Default, Debug, Clone, PartialEq, Eq)]
+        struct Data {
+            #[partial(skip)]
+            id: usize,
+
+            #[partial(skip, rescursive)]
+            inner: Option<DataInner>,
+        }
+
+        #[derive(Partial)]
+        #[derive(Default, Debug, Clone, PartialEq, Eq)]
+        struct DataInner {
+            enabled: bool,
+        }
+
+        // none set
+        let data_a = Data {
+            id: 10,
+            inner: None,
+        };
+        let data_b = Data {
+            id: 10,
+            inner: None,
+        };
+        let diff = DataPartial::diff(&data_a, &data_b);
+        assert_eq!(diff, None);
+
+        // only old set
+        let data_a = Data {
+            id: 10,
+            inner: Some(DataInner { enabled: false }),
+        };
+        let data_b = Data {
+            id: 10,
+            inner: None,
+        };
+        let diff = DataPartial::diff(&data_a, &data_b);
+        assert_eq!(diff.unwrap().inner, None);
+
+        // only new set
+        let data_a = Data {
+            id: 10,
+            inner: None,
+        };
+        let data_b = Data {
+            id: 10,
+            inner: Some(DataInner { enabled: false }),
+        };
+        let diff = DataPartial::diff(&data_a, &data_b);
+        assert_eq!(diff.unwrap().inner.unwrap().enabled, false);
+
+        // both set
+        let data_a = Data {
+            id: 10,
+            inner: Some(DataInner { enabled: false }),
+        };
+        let data_b = Data {
+            id: 10,
+            inner: Some(DataInner { enabled: true }),
+        };
+        let diff = DataPartial::diff(&data_a, &data_b);
+        assert_eq!(diff.unwrap().inner.unwrap().enabled, true);
     }
 }
