@@ -809,4 +809,72 @@ mod test {
         let diff = DataPartial::diff(&data_a, &data_b);
         assert_eq!(diff.unwrap().inner.unwrap().enabled, true);
     }
+
+
+    #[test]
+    fn optional_recursive() {
+        #[derive(Partial)]
+        #[derive(Default, Debug, Clone, PartialEq, Eq)]
+        struct Data {
+            #[partial(skip)]
+            id: usize,
+
+            #[partial(rescursive)]
+            inner: Option<DataInner>,
+        }
+
+        #[derive(Partial)]
+        #[derive(Default, Debug, Clone, PartialEq, Eq)]
+        struct DataInner {
+            enabled: bool,
+        }
+
+        // none set
+        let data_a = Data {
+            id: 10,
+            inner: None,
+        };
+        let data_b = Data {
+            id: 10,
+            inner: None,
+        };
+        let diff = DataPartial::diff(&data_a, &data_b);
+        assert_eq!(diff, None);
+
+        // only old set
+        let data_a = Data {
+            id: 10,
+            inner: Some(DataInner { enabled: false }),
+        };
+        let data_b = Data {
+            id: 10,
+            inner: None,
+        };
+        let diff = DataPartial::diff(&data_a, &data_b);
+        assert_eq!(diff.unwrap().inner, Some(None));
+
+        // only new set
+        let data_a = Data {
+            id: 10,
+            inner: None,
+        };
+        let data_b = Data {
+            id: 10,
+            inner: Some(DataInner { enabled: false }),
+        };
+        let diff = DataPartial::diff(&data_a, &data_b);
+        assert_eq!(diff.unwrap().inner.unwrap().unwrap().enabled, false);
+
+        // both set
+        let data_a = Data {
+            id: 10,
+            inner: Some(DataInner { enabled: false }),
+        };
+        let data_b = Data {
+            id: 10,
+            inner: Some(DataInner { enabled: true }),
+        };
+        let diff = DataPartial::diff(&data_a, &data_b);
+        assert_eq!(diff.unwrap().inner.unwrap().unwrap().enabled, true);
+    }
 }
